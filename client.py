@@ -10,12 +10,32 @@ import random
 import time
 from threading import Timer
 
+class Size:
+    KB = 1 << 10
+    MB = 1 << 20
+    GB = 1 << 30
+    TB = 1 << 40
+
+    @staticmethod
+    def human_readable(byte_count):
+        rounded_str = lambda x: str(round(x, 2))
+
+        if byte_count >= Size.TB:
+            return rounded_str(byte_count / Size.TB) + "TB"
+        if byte_count >= Size.GB:
+            return rounded_str(byte_count / Size.GB) + "GB"
+        if byte_count >= Size.MB:
+            return rounded_str(byte_count / Size.MB) + "MB"
+        if byte_count >= Size.KB:
+            return rounded_str(byte_count / Size.KB) + "KB"
+        return rounded_str(byte_count) + "B"
+
 msgs = 0
 total = 0
 
 def start_monitor():
     t = time.time()
-    print("{}: msgs={}, bytes={}".format(t, msgs, total))
+    print("{}: msgs={}, data={}".format(t, msgs, Size.human_readable(total)))
     Timer(3, start_monitor).start()
 
 def signal_handler(sig, frame):
