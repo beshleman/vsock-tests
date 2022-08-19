@@ -32,14 +32,33 @@ class Size:
 
 msgs = 0
 total = 0
+first_time = None
+last_time = None
+timer = None
 
 def start_monitor():
-    t = time.time()
+    global first_time
+    global last_time
+    global timer
+
+    if timer:
+        timer.cancel()
+
+    last_time = t = time.time()
+    if first_time is None:
+        first_time = t
     print("{}: msgs={}, data={}".format(t, msgs, Size.human_readable(total)))
-    Timer(3, start_monitor).start()
+    timer = Timer(3, start_monitor)
+    timer.start()
 
 def signal_handler(sig, frame):
+    if timer:
+        timer.cancel()
     print("total", total)
+    if last_time is not None and first_time is not None:
+        elapsed = last_time - first_time
+        print("elapsed:", round(elapsed, 2))
+        print("rate:", Size.human_readable(total / elapsed) + "/s")
     sys.exit(0)
 
 def get_socktype(s):
