@@ -5,18 +5,40 @@ import socket
 import sys
 import signal
 import sys
+from threading import Timer
 from timeit import default_timer as timer
 
-tot = 0
+t = None
+total = 0
 start = None
+
+class Size:
+    KB = 1 << 10
+    MB = 1 << 20
+    GB = 1 << 30
+    TB = 1 << 40
+
+    @staticmethod
+    def human_readable(byte_count):
+        rounded_str = lambda x: str(round(x, 2))
+
+        if byte_count >= Size.TB:
+            return rounded_str(byte_count / Size.TB) + "TB"
+        if byte_count >= Size.GB:
+            return rounded_str(byte_count / Size.GB) + "GB"
+        if byte_count >= Size.MB:
+            return rounded_str(byte_count / Size.MB) + "MB"
+        if byte_count >= Size.KB:
+            return rounded_str(byte_count / Size.KB) + "KB"
+        return rounded_str(byte_count) + "B"
 
 def signal_handler(sig, frame):
     if start:
         end = timer()
         elp = end - start
         print("time ", end - start)
-        print("speed", tot / elp / 1024 )
-    print("total bytes", tot)
+        print("speed", total / elp / 1024 )
+    print("total bytes", Size.human_readable(total))
     sys.exit(0)
 
 def get_socktype(s):
@@ -26,14 +48,19 @@ def get_socktype(s):
         "seqpacket": socket.SOCK_SEQPACKET,
     }.get(s)
 
-def print_current(iteration, data):
-    print(iteration, "messages received")
-    length = len(data)
-    printsize = min(length, 32)
-    post_text = ""
-    if printsize > length:
-        post_text = "..."
-    print("message(%s): %s" % (length, data[:printsize]), post_text)
+def print_traffic_data():
+    print("data received={}".format(Size.human_readable(total)))
+
+def start_monitor():
+    global t
+
+    if t:
+        t.cancel()
+
+    print_traffic_data()
+
+    t = Timer(3, start_monitor)
+    t.start()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -58,6 +85,8 @@ if __name__ == '__main__':
         recv_size = 16 * 1024
     else:
         recv_size = 16
+
+    start_monitor()
     
     while True:
         if args.socktype == "dgram":
@@ -71,9 +100,6 @@ if __name__ == '__main__':
                 recv_size = int(data.decode("ascii"))
             print("read size set to", recv_size)
         else:
-            tot += len(data)
+            total += len(data)
 
-        if data:
-            i += 1
-            if i % 100 == 0:
-                print_current(i, data)
+        i += 1
