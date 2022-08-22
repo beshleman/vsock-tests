@@ -38,10 +38,10 @@ total = 0
 msg_counts = []
 totals = []
 
-first_time = None
-last_time = None
+first_time = time.time()
 timer = None
 processes = []
+timeout = -1
 
 def acquire_all(values):
     l = [v.get_lock() for v in values]
@@ -81,10 +81,22 @@ def print_traffic_data(timestamp):
     print("{}: msgs={}, data={}".format(
         round(timestamp, 2), msg_count, Size.human_readable(total)))
 
+def cleanup():
+    global timer
+    if timer:
+        timer.cancel()
+        timer = None
+
+def get_elapsed():
+    return round(time.time() - first_time, 2)
+
 def start_monitor():
     global first_time
-    global last_time
     global timer
+
+    if timeout != -1 and get_elapsed() > timeout:
+        cleanup()
+        sys.exit(0)
 
     print_traffic_data(time.time())
     print_per_thread_total()
@@ -94,18 +106,13 @@ def start_monitor():
     timer.start()
 
 def signal_handler(sig, frame):
+    cleanup()
     if os.getpid() == parent_pid:
-        if timer:
-            timer.cancel()
-
         total = get_total()
-
+        elapsed = get_elapsed()
         print("total", Size.human_readable(total))
-        if last_time is not None and first_time is not None:
-            elapsed = last_time - first_time
-            print("elapsed:", round(elapsed, 2))
-            print("rate:", Size.human_readable(total_val / elapsed) + "/s")
-
+        print("elapsed:", elapsed)
+        print("rate:", Size.human_readable(total / elapsed) + "/s")
     exit(0)
 
 def get_socktype(s):
@@ -134,6 +141,14 @@ def main_loop(send, fuzz, size, tid=-1):
     global msg_counts
     global totals
 
+    if tid == -1:
+        tid = 0
+        msg_counts.append(Value("Q", 0))
+        totals.append(Value("Q", 0))
+
+    msgs = msg_counts[tid]
+    total = totals[tid]
+
     i = 0
     while True:
         if fuzz:
@@ -141,10 +156,6 @@ def main_loop(send, fuzz, size, tid=-1):
         else:
             data =  str(i)[0].encode('ascii') * size
         cnt = send(data)
-
-        if tid != -1:
-            msgs = msg_counts[tid]
-            total = totals[tid]
 
         with msgs.get_lock():
             msgs.value += 1
@@ -162,11 +173,18 @@ if __name__ == '__main__':
     parser.add_argument("--size", type=int, default=4096, help="The payload size")
     parser.add_argument("--fuzz", action="store_true", help="Fuzz the socket. Arg --size defines maximum input size")
     parser.add_argument("--threads", type=int, default=1, help="The number of threads")
+    parser.add_argument("--timeout", type=int, default=-1, help="The number of seconds to run the test")
     args = parser.parse_args()
 
     if args.threads < 1:
         print("--threads must be at least 1")
         sys.exit(-1)
+
+    if args.timeout != -1 and args.timeout < 0:
+        print("--timeout must be a positive integer")
+        sys.exit(-1)
+
+    timeout = args.timeout
 
     maxsize = int("9" * 16)
     if args.size > maxsize:
