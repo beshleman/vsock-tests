@@ -22,7 +22,9 @@ optional arguments:
 On the client side, execute client.py:
 
 ```
-usage: client.py [-h] [--size SIZE] [--fuzz] {stream,dgram,seqpacket} cid port
+usage: client.py [-h] [--size SIZE] [--fuzz] [--threads THREADS]
+                 [--timeout TIMEOUT]
+                 {stream,dgram,seqpacket} cid port
 
 positional arguments:
   {stream,dgram,seqpacket}
@@ -33,6 +35,8 @@ optional arguments:
   -h, --help            show this help message and exit
   --size SIZE           The payload size
   --fuzz                Fuzz the socket. Arg --size defines maximum input size
+  --threads THREADS     The number of threads
+  --timeout TIMEOUT     The number of seconds to run the test
 ```
 
 
