@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 
 import argparse
+import atexit
+import signal
 import socket
 import sys
 import signal
@@ -9,6 +11,8 @@ import random
 import time
 from multiprocessing import Process, Value
 from threading import Timer
+
+port = 0
 
 class Size:
     KB = 1 << 10
@@ -81,11 +85,17 @@ def print_traffic_data(timestamp):
     print("{}: msgs={}, data={}".format(
         round(timestamp, 2), msg_count, Size.human_readable(total)))
 
-def cleanup():
+def cleanup(*args, **kwargs):
     global timer
     if timer:
         timer.cancel()
         timer = None
+    print("cleanup")
+    print_traffic_data(time.time())
+    print_per_thread_total()
+
+signal.signal(signal.SIGINT, cleanup)
+atexit.register(cleanup)
 
 def get_elapsed():
     return round(time.time() - first_time, 2)
@@ -95,11 +105,11 @@ def start_monitor():
     global timer
 
     if timeout != -1 and get_elapsed() > timeout:
-        cleanup()
         sys.exit(0)
 
     print_traffic_data(time.time())
     print_per_thread_total()
+
     if timer:
         timer.cancel()
     timer = Timer(3, start_monitor)
@@ -165,6 +175,10 @@ def main_loop(send, fuzz, size, tid=-1):
                 total.value += cnt
         i += 1
 
+        if i % 10000 == 0:
+            print_traffic_data(time.time())
+            print_per_thread_total()
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("socktype", choices=["stream", "dgram", "seqpacket"])
@@ -185,6 +199,7 @@ if __name__ == '__main__':
         sys.exit(-1)
 
     timeout = args.timeout
+    port = args.port
 
     maxsize = int("9" * 16)
     if args.size > maxsize:
@@ -196,21 +211,20 @@ if __name__ == '__main__':
     s = socket.socket(socket.AF_VSOCK, get_socktype(args.socktype), 0)
 
     if args.socktype != "dgram":
-        addr = (args.cid, args.port)
+        addr = (args.cid, port)
         print("connecting to {}".format(repr(addr)))
         s.connect(addr)
 
     print("Press ctrl+c to exit the program")
 
-    start_monitor()
-
-    send = get_send_func(args.socktype, s, args.cid, args.port)
+    send = get_send_func(args.socktype, s, args.cid, port)
     if not args.fuzz:
         # Send 16 characters containing the future payload size
         first_message = str(args.size).zfill(16).encode('ascii')
         send(first_message)
 
     if args.threads > 1:
+        start_monitor()
         for tid in range(args.threads):
             msg_counts.append(Value("Q", 0))
             totals.append(Value("Q", 0))
