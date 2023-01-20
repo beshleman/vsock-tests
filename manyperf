@@ -31,8 +31,8 @@ done
 
 cleanup() {
 	echo "Exiting program"
-	kill -s 9 $(pgrep ./server.py) &>/dev/null || true
-	kill -s 9 $(pgrep ./client.py) &>/dev/null || true
+	kill -s 9 $(pgrep server.py) &>/dev/null || true
+	kill -s 9 $(pgrep client.py) &>/dev/null || true
 }
 
 trap cleanup EXIT SIGINT
