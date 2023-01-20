@@ -66,7 +66,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("socktype", choices=["stream", "dgram", "seqpacket"])
     parser.add_argument("port", type=int)
-    parser.add_argument("--fuzz", action="store_true", help="Accept fuzzing clients. Defaults read size to 16KB")
     args = parser.parse_args()
 
     signal.signal(signal.SIGINT, signal_handler)
@@ -81,10 +80,7 @@ if __name__ == '__main__':
     print("Press ctrl+c to exit the program")
 
     i = 0
-    if args.fuzz:
-        recv_size = 16 * 1024
-    else:
-        recv_size = 16
+    recv_size = 64 * 1024
 
     start_monitor()
     
@@ -96,8 +92,6 @@ if __name__ == '__main__':
 
         if i == 0:
             start = timer()
-            if not args.fuzz:
-                recv_size = int(data.decode("ascii"))
             print("read size set to", recv_size)
         else:
             total += len(data)
