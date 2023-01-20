@@ -188,6 +188,7 @@ if __name__ == '__main__':
     parser.add_argument("--fuzz", action="store_true", help="Fuzz the socket. Arg --size defines maximum input size")
     parser.add_argument("--threads", type=int, default=1, help="The number of threads")
     parser.add_argument("--timeout", type=int, default=-1, help="The number of seconds to run the test")
+    parser.add_argument("--priority", type=int, default=-1, help="The socket priority")
     args = parser.parse_args()
 
     if args.threads < 1:
@@ -214,6 +215,9 @@ if __name__ == '__main__':
         addr = (args.cid, port)
         print("connecting to {}".format(repr(addr)))
         s.connect(addr)
+
+    if args.priority != -1 and (0 <= args.priority <= 6):
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_PRIORITY, args.priority)
 
     print("Press ctrl+c to exit the program")
 
