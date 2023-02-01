@@ -1,0 +1,50 @@
+#!/bin/bash
+
+set -euo pipefail
+
+prog='timeout -s INT 30 ./tcp_client.py'
+args="--size $(( 63 * 1024 ))"
+sotype=stream
+threads=1
+ip="10.0.2.2"
+desc=client
+while [[ "$#" -gt 0 ]]; do
+	case $1 in
+		-t|--threads)
+			threads=$2
+			shift
+			shift
+			;;
+		-s|--server)
+			ip=""
+			args=""
+			desc=server
+			prog=./tcp_server.py
+			shift
+			;;
+		-d|--dgram)
+			sotype=dgram
+			shift
+			;;
+	esac
+done
+
+cleanup() {
+	echo "Exiting program"
+	kill -s 9 $(pgrep tcp_server.py) &>/dev/null || true
+	kill -s 9 $(pgrep tcp_client.py) &>/dev/null || true
+}
+
+trap cleanup EXIT SIGINT
+
+PORT_START=100
+PORT_END=$((${PORT_START} + ${threads}))
+PORTS=$(seq ${PORT_START} ${PORT_END})
+
+set -x
+for port in ${PORTS};
+do
+	${prog} ${sotype} ${ip} ${port} ${args} &> vsock_${desc}_port${port}.log &
+done
+
+wait
