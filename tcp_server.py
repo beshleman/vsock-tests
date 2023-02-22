@@ -71,7 +71,7 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
 
     s = socket.socket(socket.AF_INET, get_socktype(args.socktype))
-    s.bind(('127.0.0.1', args.port))
+    s.bind(('0.0.0.0', args.port))
 
     if args.socktype != "dgram":
         s.listen()
