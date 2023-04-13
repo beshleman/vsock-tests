@@ -147,7 +147,7 @@ def get_send_func(socktype, socket, cid, port):
 
     return stream_send
 
-def main_loop(send, fuzz, size, tid=-1):
+def main_loop(send, size, tid=-1):
     global msg_counts
     global totals
 
@@ -158,13 +158,10 @@ def main_loop(send, fuzz, size, tid=-1):
 
     msgs = msg_counts[tid]
     total = totals[tid]
+    data =  b'0' * size
 
     i = 0
     while True:
-        if fuzz:
-            data = os.urandom(random.randint(1, size))
-        else:
-            data =  str(i)[0].encode('ascii') * size
         cnt = send(data)
 
         with msgs.get_lock():
@@ -179,17 +176,27 @@ def main_loop(send, fuzz, size, tid=-1):
             print_traffic_data(time.time())
             print_per_thread_total()
 
+def getfamily(args):
+    return socket.AF_INET if args.inet else socket.AF_VSOCK
+
+def getaddress(args):
+    return args.cid, args.port
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("socktype", choices=["stream", "dgram", "seqpacket"])
-    parser.add_argument("cid", type=int)
+    parser.add_argument("cid", type=str, help="CID for vsock, IP for inet")
     parser.add_argument("port", type=int)
     parser.add_argument("--size", type=int, default=4096, help="The payload size")
-    parser.add_argument("--fuzz", action="store_true", help="Fuzz the socket. Arg --size defines maximum input size")
     parser.add_argument("--threads", type=int, default=1, help="The number of threads")
     parser.add_argument("--timeout", type=int, default=-1, help="The number of seconds to run the test")
     parser.add_argument("--priority", type=int, default=-1, help="The socket priority")
+    parser.add_argument("--inet", "-i", action="store_true", help="Use AF_INET (tcp or udp) instead of vsock")
+    parser.add_argument("--send", "-s", type=str, help="A message to send")
     args = parser.parse_args()
+
+    if not args.inet:
+        args.cid = int(args.cid)
 
     if args.threads < 1:
         print("--threads must be at least 1")
@@ -209,10 +216,10 @@ if __name__ == '__main__':
 
     signal.signal(signal.SIGINT, signal_handler)
 
-    s = socket.socket(socket.AF_VSOCK, get_socktype(args.socktype), 0)
+    s = socket.socket(getfamily(args), get_socktype(args.socktype), 0)
 
     if args.socktype != "dgram":
-        addr = (args.cid, port)
+        addr = getaddress(args)
         print("connecting to {}".format(repr(addr)))
         s.connect(addr)
 
@@ -222,20 +229,20 @@ if __name__ == '__main__':
     print("Press ctrl+c to exit the program")
 
     send = get_send_func(args.socktype, s, args.cid, port)
-    if not args.fuzz:
-        # Send 16 characters containing the future payload size
-        first_message = str(args.size).zfill(16).encode('ascii')
-        send(first_message)
+
+    if args.send:
+        send(args.send.encode())
+        exit(0)
 
     if args.threads > 1:
         start_monitor()
         for tid in range(args.threads):
             msg_counts.append(Value("Q", 0))
             totals.append(Value("Q", 0))
-            p = Process(target=main_loop, args=(send, args.fuzz, args.size, tid))
+            p = Process(target=main_loop, args=(send, args.size, tid))
             p.start()
             processes.append(p)
         for p in processes:
             p.join()
     else:
-        main_loop(send, args.fuzz, args.size)
+        main_loop(send, args.size)

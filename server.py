@@ -63,25 +63,47 @@ def start_monitor():
         t = Timer(3, start_monitor)
         t.start()
 
+def getfamily(args):
+    return socket.AF_INET if args.inet else socket.AF_VSOCK
+
+def getaddress(args):
+    if args.inet:
+        return '0.0.0.0', args.port
+    return socket.VMADDR_CID_HOST, args.port
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("socktype", choices=["stream", "dgram", "seqpacket"])
     parser.add_argument("port", type=int)
+    parser.add_argument("--inet", "-i", action="store_true", help="Use AF_INET (tcp or udp) instead of vsock")
+    parser.add_argument("--recv", "-r", action="store_true", help="Recieve and print a message")
     args = parser.parse_args()
+
+    if args.inet:
+        recv_size = 128 * 1024
+    else:
+        recv_size = 64 * 1024
 
     signal.signal(signal.SIGINT, signal_handler)
 
-    s = socket.socket(socket.AF_VSOCK, get_socktype(args.socktype))
-    s.bind((socket.VMADDR_CID_HOST, args.port))
+    s = socket.socket(getfamily(args), get_socktype(args.socktype))
+    s.bind(getaddress(args))
 
     if args.socktype != "dgram":
         s.listen()
         conn, (cid, port) = s.accept()
 
+    if args.recv:
+        if args.socktype == "dgram":
+            data, _ = s.recvfrom(recv_size)
+        else:
+            data = conn.recv(recv_size)
+        print(data.decode())
+        exit(0)
+
     print("Press ctrl+c to exit the program")
 
     i = 0
-    recv_size = 64 * 1024
 
     start_monitor()
     
