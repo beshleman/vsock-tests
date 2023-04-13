@@ -5,12 +5,13 @@ import socket
 import sys
 import signal
 import sys
-from threading import Timer
+from threading import Timer, Event
 from timeit import default_timer as timer
 
 t = None
 total = 0
 start = None
+done = Event()
 
 class Size:
     KB = 1 << 10
@@ -33,13 +34,14 @@ class Size:
         return rounded_str(byte_count) + "B"
 
 def signal_handler(sig, frame):
+    done.set()
     if start:
         end = timer()
         elp = end - start
         print("time ", end - start)
-        print("speed", total / elp / 1024 )
+        print("speed", total / elp / 1024 / 1024, 'MB/s' )
     print("total bytes", Size.human_readable(total))
-    sys.exit(0)
+    exit(0)
 
 def get_socktype(s):
     return {
@@ -48,19 +50,18 @@ def get_socktype(s):
         "seqpacket": socket.SOCK_SEQPACKET,
     }.get(s)
 
-def print_traffic_data():
-    print("data received={}".format(Size.human_readable(total)))
-
 def start_monitor():
     global t
 
     if t:
         t.cancel()
 
-    print_traffic_data()
 
-    t = Timer(3, start_monitor)
-    t.start()
+    print("data received={}".format(Size.human_readable(total)))
+
+    if not done.is_set():
+        t = Timer(3, start_monitor)
+        t.start()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -84,7 +85,7 @@ if __name__ == '__main__':
 
     start_monitor()
     
-    while True:
+    while not done.is_set():
         if args.socktype == "dgram":
             data, _ = s.recvfrom(recv_size)
         else:
