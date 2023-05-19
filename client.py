@@ -12,8 +12,6 @@ import time
 from multiprocessing import Process, Value
 from threading import Timer
 
-port = 0
-
 class Size:
     KB = 1 << 10
     MB = 1 << 20
@@ -132,20 +130,23 @@ def get_socktype(s):
         "seqpacket": socket.SOCK_SEQPACKET,
     }.get(s)
 
-def get_send_func(socktype, socket, cid, port):
-    def dgram_send(data):
-        return s.sendto(data, (cid, port))
+def get_send_func(args, socket):
+    def sendto(data):
+        return s.sendto(data, (args.cid, args.port))
 
-    def stream_send(data):
+    def sendall(data):
         cnt = 0
         if s.sendall(data) is None:
             cnt = len(data)
         return cnt
 
-    if socktype == "dgram":
-        return dgram_send
+    if args.socktype == "dgram":
+        if args.dgram_sendto:
+            return sendto
+        else:
+            return sendall
 
-    return stream_send
+    return sendall
 
 def main_loop(send, size, tid=-1):
     global msg_counts
@@ -193,6 +194,8 @@ if __name__ == '__main__':
     parser.add_argument("--priority", type=int, default=-1, help="The socket priority")
     parser.add_argument("--inet", "-i", action="store_true", help="Use AF_INET (tcp or udp) instead of vsock")
     parser.add_argument("--send", "-s", type=str, help="A message to send")
+    parser.add_argument("--dgram-sendto", "-d", action="store_true",
+                        help="Use sendto() for dgram")
     args = parser.parse_args()
 
     if not args.inet:
@@ -207,7 +210,6 @@ if __name__ == '__main__':
         sys.exit(-1)
 
     timeout = args.timeout
-    port = args.port
 
     maxsize = int("9" * 16)
     if args.size > maxsize:
@@ -228,7 +230,7 @@ if __name__ == '__main__':
 
     print("Press ctrl+c to exit the program")
 
-    send = get_send_func(args.socktype, s, args.cid, port)
+    send = get_send_func(args, args.socktype, s, args.cid, args.port)
 
     if args.send:
         send(args.send.encode())
