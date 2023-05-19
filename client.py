@@ -230,7 +230,7 @@ if __name__ == '__main__':
 
     print("Press ctrl+c to exit the program")
 
-    send = get_send_func(args, args.socktype, s, args.cid, args.port)
+    send = get_send_func(args, s)
 
     if args.send:
         send(args.send.encode())
